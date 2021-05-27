@@ -15,6 +15,7 @@ import sys
 import struct
 import time
 import socket
+from scapy import all as scapy
 
 from cip import CIP, CIP_RespForwardOpen
 from enip_tcp import ENIP_TCP, ENIP_RegisterSession, ENIP_SendRRData, \
@@ -103,14 +104,14 @@ class PLCClient(object):
         '''
         self.send_rr_cip(cippkt)
         resppkt = self.recv_enippkt()
-        cippkt = resppkt[CIP]
-        status = self.get_cip_status(cippkt)
+        status = self.get_cip_status(resppkt)
         if status != b'\x00':
             logger.error(
                 "Failed to Forward Open CIP Connection: %r", status)
             return False
+        cippkt = resppkt[CIP]
         assert isinstance(cippkt.payload, CIP_RespForwardOpen)
-        enip_connid = self.get_enip_connid(cippkt)
+        enip_connid = self.get_enip_connid(self, resppkt)
         self.enip_connid = enip_connid
         print("Established Forward Open CIP Connection: {}"
               .format(hex(enip_connid)))
@@ -122,14 +123,13 @@ class PLCClient(object):
         '''
         self.send_rr_cip(cippkt)
         resppkt = self.recv_enippkt()
-        cippkt = resppkt[CIP]
-        status = self.get_cip_status(cippkt)
+        status = self.get_cip_status(resppkt)
         if status != b'\x00':
-            logger.error("Failed to Forward Close CIP Connection: %r", status)
+            logger.error(
+                "Failed to Forward Close CIP Connection: %r", status)
             return False
-        print(
-            "Closed Forward Open CIP Connection: {}".format(
-                hex(self.enip_connid)))
+        print("Closed Forward Open CIP Connection: {}".format(
+            hex(self.enip_connid)))
         return True
 
     def send_payloads(self, payloads):
@@ -143,12 +143,11 @@ class PLCClient(object):
             count += 1
             # Receive the response
             resppkt = self.recv_enippkt()
-            cippkt = resppkt[CIP]
-            status = self.get_cip_status(cippkt)
+            status = self.get_cip_status(resppkt)
             if status != b'\x00':
                 logger.error("Sending Payload Failed: %r", status)
+                cippkt = resppkt[CIP]
                 cippkt.show()
-                return False
             else:
                 print("Success!")
             time.sleep(0.05)
@@ -168,8 +167,10 @@ class PLCClient(object):
         '''
         Closes the socket connection to the PLC
         '''
-        self.sock.shutdown(1)
-        self.sock.close()
+        if not NO_NETWORK:
+            self.sock.shutdown(1)
+            self.sock.close()
+        return True
 
     @staticmethod
     def get_hex_list(bytes_str):
@@ -186,27 +187,40 @@ class PLCClient(object):
         '''
         Returns the int value of a hex list after concatenating
         '''
-        l_bytes = ''.join([chr(int(c, 16)) for c in input_list])
-        value = struct.unpack('<I', l_bytes)[0]
-        return value
+        try:
+            l_bytes = ''.join([chr(int(c, 16)) for c in input_list])
+            value = struct.unpack('<I', l_bytes)[0]
+            return value
+        except TypeError:
+            return 0
 
     @staticmethod
-    def get_enip_connid(self, cippkt):
+    def get_enip_connid(self, resppkt):
         '''
         Returns the enip connection id
         '''
-        enip_connid_str = str(cippkt)[4:8]
-        enip_connid_hex_list = self.get_hex_list(enip_connid_str)
-        enip_connid = self.convert_hex_list_to_int(enip_connid_hex_list)
+        enip_connid = 0
+        if CIP in resppkt:
+            cippkt = resppkt[CIP]
+            if cippkt.haslayer(scapy.Raw):
+                load = cippkt.load
+                enip_connid_str = load[4:8]
+                enip_connid_hex_list = self.get_hex_list(enip_connid_str)
+                enip_connid = self.convert_hex_list_to_int(
+                    enip_connid_hex_list)
         return enip_connid
 
     @staticmethod
-    def get_cip_status(cippkt):
+    def get_cip_status(resppkt):
         '''
         Returns the status of the CIP response packet
         '''
-        load = cippkt.load
-        status = load[2:3]
+        status = b'\x00'
+        if CIP in resppkt:
+            cippkt = resppkt[CIP]
+            if cippkt.haslayer(scapy.Raw):
+                load = cippkt.load
+                status = load[2:3]
         return status
 
 
@@ -291,8 +305,8 @@ def main():
     payloads = get_payloads(pkts)
 
     # Connect to PLC
-    # client = connect_plc(PLC_IP)
-    client = connect_plc('127.0.0.1')
+    client = connect_plc(PLC_IP)
+    # client = connect_plc('127.0.0.1')
 
     # Send forward open request
     fwopenpkt = pkts["fwopen"]
@@ -300,22 +314,21 @@ def main():
         sys.exit(1)
 
     # Send CIP WriteTag request for payloads
-    if not client.send_payloads(payloads):
-        sys.exit(1)
+    client.send_payloads(payloads)
 
     # Waits for t = 5 seconds
     t = 5
     for i in reversed(range(0, t)):
         time.sleep(1)
         print(f"Closing connection in {i}", end="\r", flush=True)
+    print()
 
     # Close the connection
     fwclosepkt = pkts["fwclose"]
     if not client.send_forward_close(fwclosepkt):
         client.close_connection()
+        print("Closed Session: {}".format(hex(client.session_id)))
         sys.exit(1)
-    client.close_connection()
-    print("Closed Session: {}".format(hex(client.session_id)))
 
 
 if __name__ == '__main__':
