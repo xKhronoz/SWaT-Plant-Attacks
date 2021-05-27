@@ -1,8 +1,8 @@
 '''
 swat_control.py
 An attack script that can control the start or stop the SWaT Plant via sending
-crafted packets to the PLC which are connected to other PLCs, in this case
-PLC1 which will determine the state of other PLCs.
+specially crafted packets to the PLC which are connected to other PLCs,
+in this case PLC1 which will determine the state of other PLCs.
 Made with help using scapy-cip-enip dissector to craft some of the packets:
 https://github.com/scy-phy/scapy-cip-enip
 
