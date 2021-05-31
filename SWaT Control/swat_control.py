@@ -321,7 +321,6 @@ def main():
     '''
     Main Function
     '''
-
     # Get Commandline arguments via argparse
     args = get_argparse()
     plc_port = None
@@ -335,7 +334,7 @@ def main():
     plc_ip = args.ip
     plc_port = args.port
 
-    print("{} started: {}".format(basename(__file__), datetime.now()))
+    print("{} started at {}".format(basename(__file__), datetime.now()))
 
     # Construct CIP packets and get Payloads to send
     pkts = construct_cip_pkts()
