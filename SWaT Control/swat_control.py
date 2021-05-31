@@ -297,6 +297,9 @@ def wait(t, msg):
 
 
 def get_argparse():
+    '''
+    Creates Arg Parse object
+    '''
     parser = argparse.ArgumentParser(
         description="Python Script to Start/Stop the SWaT Plant")
     parser.add_argument(
