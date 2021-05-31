@@ -16,6 +16,7 @@ import sys
 import time
 import socket
 import argparse
+from datetime import datetime
 from scapy import all as scapy
 
 from cip import CIP, CIP_RespForwardOpen
@@ -319,6 +320,8 @@ def main():
     '''
     Main Function
     '''
+    print("{} Started: {}".format(__file__, datetime.now()))
+
     # Get Commandline arguments via argparse
     args = get_argparse()
     plc_port = None
