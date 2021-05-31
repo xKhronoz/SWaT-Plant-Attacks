@@ -12,9 +12,9 @@ Email: yeek3063@gmail.com
 import binascii
 import logging
 import sys
-import struct
 import time
 import socket
+import argparse
 from scapy import all as scapy
 
 from cip import CIP, CIP_RespForwardOpen
@@ -25,17 +25,8 @@ from enip_tcp import ENIP_TCP, ENIP_RegisterSession, ENIP_SendRRData, \
 logging.basicConfig(format='[%(levelname)s] %(message)s', level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
-'''
-Global Switch to define script control type: start / stop / input
-0 = stop plant
-1 = start plant
-2 = ask user input to start/stop
-'''
-FUNC = 0
 # Global switch to make it easy to test without sending anything
 NO_NETWORK = False
-# Global Variable to specify the main PLC
-PLC_IP = "192.168.1.10"
 
 
 class PLCClient(object):
@@ -43,7 +34,7 @@ class PLCClient(object):
     Handle all the state of an Ethernet/IP session with the PLC
     '''
 
-    def __init__(self, plc_addr, plc_port=44818):
+    def __init__(self, plc_addr, plc_port):
         if not NO_NETWORK:
             try:
                 self.sock = socket.create_connection((plc_addr, plc_port),
@@ -150,6 +141,7 @@ class PLCClient(object):
                 cippkt.show()
             else:
                 print("Success!")
+            # 50ms delay before second payload
             time.sleep(0.05)
         return True
 
@@ -168,31 +160,27 @@ class PLCClient(object):
         Closes the socket connection to the PLC
         '''
         if not NO_NETWORK:
+            print("Closed Session: {}".format(hex(self.session_id)))
             self.sock.shutdown(1)
             self.sock.close()
         return True
 
     @staticmethod
-    def get_hex_list(bytes_str):
+    def get_hex_list(pkt):
         '''
-        Returns a list of hex values
+        Returns a list of hex values from packet
         '''
-        hex_list = []
-        for b in bytes_str:
-            hex_list.append(hex(ord(b)))
+        hex_list = scapy.hexstr(pkt).split()
         return hex_list
 
     @staticmethod
     def convert_hex_list_to_int(input_list):
         '''
-        Returns the int value of a hex list after concatenating
+        Returns the int value of a hex list after concatenating and reversing
         '''
-        try:
-            l_bytes = ''.join([chr(int(c, 16)) for c in input_list])
-            value = struct.unpack('<I', l_bytes)[0]
-            return value
-        except TypeError:
-            return 0
+        rev_input_list = reversed(input_list)
+        value = int(''.join(rev_input_list), 16)
+        return value
 
     @staticmethod
     def get_enip_connid(self, resppkt):
@@ -203,9 +191,8 @@ class PLCClient(object):
         if CIP in resppkt:
             cippkt = resppkt[CIP]
             if cippkt.haslayer(scapy.Raw):
-                load = cippkt.load
-                enip_connid_str = load[4:8]
-                enip_connid_hex_list = self.get_hex_list(enip_connid_str)
+                hex_cippkt_list = self.get_hex_list(cippkt)
+                enip_connid_hex_list = hex_cippkt_list[4:8]
                 enip_connid = self.convert_hex_list_to_int(
                     enip_connid_hex_list)
         return enip_connid
@@ -259,20 +246,23 @@ def construct_cip_pkts():
     return cippkts
 
 
-def get_payloads(pkts):
+def get_payloads(pkts, func):
     '''
     Returns payloads based on FUNC type
+    0 = stop plant
+    1 = start plant
+    2 = interactive, ask user input to start/stop
     '''
-    if FUNC == 0:
+    if func == 0:
         print("FUNC 0 - Stop Plant")
         payloads = [pkts["stop_payload1"], pkts["stop_payload2"]]
         return payloads
-    if FUNC == 1:
+    if func == 1:
         print("FUNC 1 - Start Plant")
         payloads = [pkts["start_payload1"], pkts["start_payload2"]]
         return payloads
-    if FUNC == 2:
-        print("FUNC 2 - User Input")
+    if func == 2:
+        print("FUNC 2 - Interactive")
         choice = input("Start/Stop Plant? > ")
         while choice.lower != "start" or choice.lower != "stop":
             if choice.lower() == "start":
@@ -285,50 +275,84 @@ def get_payloads(pkts):
                 choice = input("Start/Stop Plant?")
 
 
-def connect_plc(ip):
+def connect_plc(ip, port):
     '''
     Creates a socket object which connects to the plc
     '''
-    client = PLCClient(ip)
+    client = PLCClient(ip, port)
     if not client.connected:
         sys.exit(1)
     print("Established Session: {}".format(hex(client.session_id)))
     return client
 
 
+def wait(t, msg):
+    '''
+    Waits for t seconds and prints msg
+    '''
+    for i in reversed(range(0, t)):
+        time.sleep(1)
+        print(f"{msg} {i}", end="\r", flush=True)
+    print()
+
+
+def get_argparse():
+    parser = argparse.ArgumentParser(
+        description="Python Script to Start/Stop the SWaT Plant")
+    parser.add_argument(
+        "function", choices=["start", "stop"],
+        help="Function: [Start/Stop] the Plant")
+    parser.add_argument(
+        "-ip", help="IP of PLC to connect to", type=str,
+        default="192.168.1.10")
+    parser.add_argument(
+        "-port", help="Port of PLC to connect to", type=int, default=44818)
+    args = parser.parse_args()
+    return args
+
+
 def main():
     '''
     Main Function
     '''
-    # Construct CIP packets and Payloads to send
+    # Get Commandline arguments via argparse
+    args = get_argparse()
+    plc_port = None
+    function = args.function
+    if function == "stop":
+        func = 0
+    elif function == "start":
+        func = 1
+    elif function == "int":
+        func = 2
+    plc_ip = args.ip
+    plc_port = args.port
+
+    # Construct CIP packets and get Payloads to send
     pkts = construct_cip_pkts()
-    payloads = get_payloads(pkts)
+    payloads = get_payloads(pkts, func)
 
     # Connect to PLC
-    client = connect_plc(PLC_IP)
-    # client = connect_plc('127.0.0.1')
+    client = connect_plc(plc_ip, plc_port)
 
     # Send forward open request
     fwopenpkt = pkts["fwopen"]
     if not client.send_forward_open(fwopenpkt):
         sys.exit(1)
 
+    # Waits for 2 seconds before sending payload
+    wait(2, msg="Sending Payload in")
+
     # Send CIP WriteTag request for payloads
     client.send_payloads(payloads)
 
-    # Waits for t = 5 seconds
-    t = 5
-    for i in reversed(range(0, t)):
-        time.sleep(1)
-        print(f"Closing connection in {i}", end="\r", flush=True)
-    print()
+    # Waits for 5 seconds before closing connections
+    wait(5, msg="Closing Connection in")
 
     # Close the connection
     fwclosepkt = pkts["fwclose"]
-    if not client.send_forward_close(fwclosepkt):
-        client.close_connection()
-        print("Closed Session: {}".format(hex(client.session_id)))
-        sys.exit(1)
+    client.send_forward_close(fwclosepkt)
+    client.close_connection()
 
 
 if __name__ == '__main__':
