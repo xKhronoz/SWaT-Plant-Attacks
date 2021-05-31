@@ -335,7 +335,7 @@ def main():
     plc_ip = args.ip
     plc_port = args.port
 
-    print("{} Started: {}".format(basename(__file__), datetime.now()))
+    print("{} started: {}".format(basename(__file__), datetime.now()))
 
     # Construct CIP packets and get Payloads to send
     pkts = construct_cip_pkts()
