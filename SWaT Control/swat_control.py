@@ -144,7 +144,7 @@ class PLCClient(object):
                 cippkt.show()
             else:
                 print("Success!")
-            # 50ms delay before second payload
+            # 50ms delay before second payload [IMPORTANT!! to make it work]
             time.sleep(0.05)
         return True
 
