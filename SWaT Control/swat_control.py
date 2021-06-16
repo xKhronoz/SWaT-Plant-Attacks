@@ -306,7 +306,7 @@ def get_argparse():
     parser = argparse.ArgumentParser(
         description="Python Script to Start/Stop the SWaT Plant")
     parser.add_argument(
-        "function", choices=["start", "stop"],
+        "function", choices=["start", "stop", "int"],
         help="Function: [Start/Stop] the Plant")
     parser.add_argument(
         "-ip", help="IP of PLC to connect to", type=str,
