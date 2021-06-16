@@ -104,7 +104,8 @@ class PLCClient(object):
                 "Failed to Forward Open CIP Connection: %r", status)
             return False
         cippkt = resppkt[CIP]
-        assert isinstance(cippkt.payload, CIP_RespForwardOpen)
+        if self.session_id != 0:
+            assert isinstance(cippkt.payload, CIP_RespForwardOpen)
         enip_connid = self.get_enip_connid(self, resppkt)
         self.enip_connid = enip_connid
         print("Established Forward Open CIP Connection: {}"
@@ -118,7 +119,7 @@ class PLCClient(object):
         self.send_rr_cip(cippkt)
         resppkt = self.recv_enippkt()
         status = self.get_cip_status(resppkt)
-        if status != b'\x00':
+        if status != b'\x00' and self.session_id != 0:
             logger.error(
                 "Failed to Forward Close CIP Connection: %r", status)
             return False
@@ -138,7 +139,7 @@ class PLCClient(object):
             # Receive the response
             resppkt = self.recv_enippkt()
             status = self.get_cip_status(resppkt)
-            if status != b'\x00':
+            if status != b'\x00' and self.session_id != 0:
                 logger.error("Sending Payload Failed: %r", status)
                 cippkt = resppkt[CIP]
                 cippkt.show()
