@@ -20,8 +20,8 @@ from datetime import datetime
 from os.path import basename
 from scapy import all as scapy
 
-from cip import CIP, CIP_RespForwardOpen
-from enip_tcp import ENIP_TCP, ENIP_RegisterSession, ENIP_SendRRData, \
+from core.cip import CIP, CIP_RespForwardOpen
+from core.enip_tcp import ENIP_TCP, ENIP_RegisterSession, ENIP_SendRRData, \
     ENIP_SendUnitData_Item, ENIP_SendUnitData, ENIP_ConnectionAddress, \
     ENIP_ConnectionPacket
 
