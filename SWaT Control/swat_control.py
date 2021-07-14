@@ -20,8 +20,8 @@ from datetime import datetime
 from os.path import basename
 from scapy import all as scapy
 
-from cip import CIP, CIP_RespForwardOpen
-from enip_tcp import ENIP_TCP, ENIP_RegisterSession, ENIP_SendRRData, \
+from core.cip import CIP, CIP_RespForwardOpen
+from core.enip_tcp import ENIP_TCP, ENIP_RegisterSession, ENIP_SendRRData, \
     ENIP_SendUnitData_Item, ENIP_SendUnitData, ENIP_ConnectionAddress, \
     ENIP_ConnectionPacket
 
@@ -104,7 +104,8 @@ class PLCClient(object):
                 "Failed to Forward Open CIP Connection: %r", status)
             return False
         cippkt = resppkt[CIP]
-        assert isinstance(cippkt.payload, CIP_RespForwardOpen)
+        if self.session_id != 0:
+            assert isinstance(cippkt.payload, CIP_RespForwardOpen)
         enip_connid = self.get_enip_connid(self, resppkt)
         self.enip_connid = enip_connid
         print("Established Forward Open CIP Connection: {}"
@@ -118,7 +119,7 @@ class PLCClient(object):
         self.send_rr_cip(cippkt)
         resppkt = self.recv_enippkt()
         status = self.get_cip_status(resppkt)
-        if status != b'\x00':
+        if status != b'\x00' and self.session_id != 0:
             logger.error(
                 "Failed to Forward Close CIP Connection: %r", status)
             return False
@@ -138,13 +139,13 @@ class PLCClient(object):
             # Receive the response
             resppkt = self.recv_enippkt()
             status = self.get_cip_status(resppkt)
-            if status != b'\x00':
+            if status != b'\x00' and self.session_id != 0:
                 logger.error("Sending Payload Failed: %r", status)
                 cippkt = resppkt[CIP]
                 cippkt.show()
             else:
                 print("Success!")
-            # 50ms delay before second payload
+            # 50ms delay before second payload [IMPORTANT!! to make it work]
             time.sleep(0.05)
         return True
 
@@ -306,7 +307,7 @@ def get_argparse():
     parser = argparse.ArgumentParser(
         description="Python Script to Start/Stop the SWaT Plant")
     parser.add_argument(
-        "function", choices=["start", "stop"],
+        "function", choices=["start", "stop", "int"],
         help="Function: [Start/Stop] the Plant")
     parser.add_argument(
         "-ip", help="IP of PLC to connect to", type=str,
